@@ -16,6 +16,18 @@ import (
 	"io"
 )
 
+func download(bucket string, image string, desc string) {
+	var dResult bytes.Buffer
+	dCmd := exec.Command("./qrsctl", "get", bucket, image, desc + "/" + image)
+	dCmd.Stdout = &dResult
+	err := dCmd.Run()
+	if err != nil {
+		log.Println(err, ", downloading " + image + " failed, download continue")
+	} else {
+		fmt.Println("image: ", image, " download success")
+	}
+}
+
 func pull(bucket string, desc string) {
 	var result bytes.Buffer
 	cmd := exec.Command("./qrsctl", "listprefix", bucket, "")
@@ -25,9 +37,9 @@ func pull(bucket string, desc string) {
 		log.Fatal(err)
 	}
 
-	totalDownloads := 0
 	// extrace `marker:` signature
 	images := strings.Split(result.String()[10:], "\n")
+	done := make(chan bool)
 	for _, image := range images {
 		if strings.Contains(image, "/") {
 			dir := strings.Split(image, "/")[0]
@@ -36,18 +48,9 @@ func pull(bucket string, desc string) {
 				os.Mkdir(path, 0766)
 			}
 		}
-		var dResult bytes.Buffer
-		dCmd := exec.Command("./qrsctl", "get", bucket, image, desc + "/" + image)
-		dCmd.Stdout = &dResult
-		err := dCmd.Run()
-		if err != nil {
-			log.Println(err, ", downloading " + image + " failed, download continue")
-		} else {
-			totalDownloads++
-			fmt.Println("image: ", image, " download success")
-		}
+		go download(bucket, image, desc)
 	}
-	fmt.Println("total downloads: ", totalDownloads)
+	<-done
 }
 
 func upload(name string, path string) {
